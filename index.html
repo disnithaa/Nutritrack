@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriTrack - Nutrition Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="main-wrapper">
+        <!-- LEFT SECTION: INPUT -->
+        <div class="left-section">
+            <header>
+                <h1>🥗 NutriTrack</h1>
+                <p class="subtitle">Track your nutrition</p>
+            </header>
+
+            <!-- Date Picker -->
+            <div class="date-picker-section">
+                <button class="date-nav-btn" onclick="previousDay()">←</button>
+                <div class="date-display">
+                    <div class="date-display-day" id="dayDisplay">Today</div>
+                    <div class="date-display-date" id="dateDisplay"></div>
+                </div>
+                <input type="date" id="dateInput" onchange="changeDate()">
+                <button class="date-nav-btn" onclick="nextDay()">→</button>
+            </div>
+
+            <!-- Add Food Card -->
+            <div class="card">
+                <h2>📝 Add Food</h2>
+                <div class="input-group">
+                    <select id="mealSelect">
+                        <option value="breakfast">🌅 Breakfast</option>
+                        <option value="lunch">🌞 Lunch</option>
+                        <option value="dinner">🌙 Dinner</option>
+                        <option value="snacks">🍿 Snacks</option>
+                    </select>
+                    <select id="foodSelect">
+                        <option value="">Choose Food...</option>
+                    </select>
+                    <input type="number" id="gramsInput" placeholder="Grams" min="1" step="0.1">
+                    <button onclick="addFood()">Add</button>
+                </div>
+
+                <!-- Tab for Add Custom Food -->
+                <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                    <button id="presetTab" style="flex: 1; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;" onclick="showPreset()">Preset Foods</button>
+                    <button id="customTab" style="flex: 1; background: var(--light); color: var(--gray); padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;" onclick="showCustom()">Custom Food</button>
+                </div>
+
+                <!-- Custom Food Form (Hidden by default) -->
+                <div id="customFoodForm" style="display: none; background: var(--light); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+                    <input type="text" id="customFoodName" placeholder="Food name" style="width: 100%; margin-bottom: 8px; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                        <input type="number" id="customCalories" placeholder="Calories" min="0" step="0.1" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                        <input type="number" id="customProtein" placeholder="Protein (g)" min="0" step="0.1" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                        <input type="number" id="customCarbs" placeholder="Carbs (g)" min="0" step="0.1" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                        <input type="number" id="customFat" placeholder="Fat (g)" min="0" step="0.1" style="padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    </div>
+                    <button onclick="addCustomFood()" style="width: 100%; background: var(--success); color: white; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Add Custom Food</button>
+                </div>
+
+                <h3 class="meal-title">Your Meals</h3>
+                <div class="meals-container" id="mealsContainer"></div>
+
+                <button class="btn-success" style="width: 100%; padding: 14px; font-size: 1.05em; margin-bottom: 10px;" onclick="generateReport()">📊 Generate Report</button>
+                <button class="reset-btn" onclick="resetDay()">Reset This Day</button>
+            </div>
+        </div>
+
+        <!-- RIGHT SECTION: REPORTS & GRAPHS -->
+        <div class="right-section">
+            <div class="report-header">
+                <h2>📊 Nutrition Report</h2>
+            </div>
+
+            <div id="reportContainer" class="report-container">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>Add foods and click "Generate Report"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Enhanced Food Database with Indian foods
+        const foodDatabase = {
+            // Proteins
+            'chicken': { name: 'Chicken Breast', calories: 165, protein: 31, carbs: 0, fat: 3.6 },
+            'fish': { name: 'Salmon', calories: 208, protein: 25, carbs: 0, fat: 13 },
+            'egg': { name: 'Egg', calories: 155, protein: 13, carbs: 1.1, fat: 11 },
+            'paneer': { name: 'Paneer (Cottage Cheese)', calories: 265, protein: 26, carbs: 3.6, fat: 17 },
+            'tofu': { name: 'Tofu', calories: 76, protein: 8, carbs: 1.9, fat: 4.8 },
+            
+            // Indian Grains & Bread
+            'rice': { name: 'Basmati Rice (cooked)', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
+            'brown_rice': { name: 'Brown Rice (cooked)', calories: 111, protein: 2.6, carbs: 23, fat: 0.9 },
+            'roti': { name: 'Roti (1 piece)', calories: 104, protein: 3.5, carbs: 20, fat: 1.3 },
+            'naan': { name: 'Naan Bread', calories: 262, protein: 8, carbs: 42, fat: 6.3 },
+            'paratha': { name: 'Paratha', calories: 237, protein: 6, carbs: 32, fat: 10 },
+            'dal_rice': { name: 'Dal Rice', calories: 206, protein: 8.5, carbs: 38, fat: 2.5 },
+            
+            // Indian Curries & Dishes
+            'dal_tadka': { name: 'Dal Tadka', calories: 119, protein: 9, carbs: 19, fat: 2 },
+            'chicken_curry': { name: 'Chicken Curry', calories: 187, protein: 22, carbs: 6, fat: 9 },
+            'chana_masala': { name: 'Chana Masala', calories: 164, protein: 8, carbs: 24, fat: 4 },
+            'sambar': { name: 'Sambar', calories: 75, protein: 3, carbs: 12, fat: 1.5 },
+            'rasam': { name: 'Rasam', calories: 42, protein: 1.5, carbs: 8, fat: 0.5 },
+            'biryani': { name: 'Biryani (1 serving)', calories: 487, protein: 24, carbs: 52, fat: 18 },
+            'khichdi': { name: 'Khichdi', calories: 150, protein: 5.5, carbs: 28, fat: 2 },
+            
+            // Indian Vegetables
+            'bhindi': { name: 'Bhindi Fry', calories: 68, protein: 2.5, carbs: 11, fat: 2 },
+            'aloo_gobi': { name: 'Aloo Gobi', calories: 112, protein: 3, carbs: 18, fat: 4 },
+            'spinach_paneer': { name: 'Spinach Paneer', calories: 192, protein: 16, carbs: 5, fat: 13 },
+            'brinjal_fry': { name: 'Brinjal Fry', calories: 78, protein: 2.3, carbs: 12, fat: 3.2 },
+            
+            // Indian Snacks
+            'samosa': { name: 'Samosa', calories: 251, protein: 5, carbs: 32, fat: 12 },
+            'pakora': { name: 'Pakora (3 pieces)', calories: 227, protein: 5.5, carbs: 24, fat: 12.5 },
+            'dosa': { name: 'Dosa', calories: 168, protein: 3.5, carbs: 32, fat: 2.5 },
+            'idli': { name: 'Idli (2 pieces)', calories: 67, protein: 2, carbs: 14, fat: 0.5 },
+            'upma': { name: 'Upma', calories: 189, protein: 5.5, carbs: 32, fat: 4 },
+            'poha': { name: 'Poha', calories: 155, protein: 2.5, carbs: 32, fat: 1.5 },
+            'uttapam': { name: 'Uttapam', calories: 198, protein: 4, carbs: 38, fat: 2 },
+            'idiyappam': { name: 'Idiyappam', calories: 142, protein: 3, carbs: 28, fat: 1.5 },
+            
+            // Indian Sweets & Desserts
+            'gulab_jamun': { name: 'Gulab Jamun (2)', calories: 189, protein: 2, carbs: 28, fat: 8 },
+            'kheer': { name: 'Kheer (1 cup)', calories: 245, protein: 4, carbs: 38, fat: 8 },
+            'halwa': { name: 'Halwa', calories: 342, protein: 4, carbs: 45, fat: 16 },
+            
+            // Other items
+            'broccoli': { name: 'Broccoli', calories: 34, protein: 2.8, carbs: 7, fat: 0.4 },
+            'apple': { name: 'Apple', calories: 52, protein: 0.3, carbs: 14, fat: 0.2 },
+            'banana': { name: 'Banana', calories: 89, protein: 1.1, carbs: 23, fat: 0.3 },
+            'bread': { name: 'Whole Wheat Bread', calories: 247, protein: 13, carbs: 43, fat: 2.4 },
+            'milk': { name: 'Milk', calories: 42, protein: 3.4, carbs: 5, fat: 1 },
+            'almonds': { name: 'Almonds', calories: 579, protein: 21, carbs: 22, fat: 50 },
+            'pasta': { name: 'Pasta', calories: 131, protein: 5, carbs: 25, fat: 1.1 },
+            'yogurt': { name: 'Yogurt', calories: 59, protein: 10, carbs: 3.3, fat: 0.4 }
+        };
+
+        let mealData = {};
+        let currentDate = new Date();
+        let macroChart = null;
+        let calorieChart = null;
+
+        // Initialize data structure
+        function initializeMealData() {
+            const dateKey = getDateKey(currentDate);
+            if (!localStorage.getItem('mealData')) {
+                localStorage.setItem('mealData', JSON.stringify({}));
+            }
+            const allData = JSON.parse(localStorage.getItem('mealData'));
+            if (!allData[dateKey]) {
+                allData[dateKey] = {
+                    breakfast: [],
+                    lunch: [],
+                    dinner: [],
+                    snacks: []
+                };
+                localStorage.setItem('mealData', JSON.stringify(allData));
+            }
+            mealData = allData[dateKey];
+        }
+
+        function getDateKey(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function updateDateDisplay() {
+            const today = new Date();
+            const isToday = getDateKey(currentDate) === getDateKey(today);
+            document.getElementById('dayDisplay').textContent = isToday ? 'Today' : currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+            document.getElementById('dateDisplay').textContent = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('dateInput').value = getDateKey(currentDate);
+        }
+
+        function previousDay() {
+            currentDate.setDate(currentDate.getDate() - 1);
+            changeToCurrentDate();
+        }
+
+        function nextDay() {
+            currentDate.setDate(currentDate.getDate() + 1);
+            changeToCurrentDate();
+        }
+
+        function changeDate() {
+            const dateValue = document.getElementById('dateInput').value;
+            if (dateValue) {
+                currentDate = new Date(dateValue + 'T00:00:00');
+                changeToCurrentDate();
+            }
+        }
+
+        function changetoCurrentDate() {
+            initializeMealData();
+            updateDateDisplay();
+            renderMeals();
+            document.getElementById('reportContainer').innerHTML = 'Add foods and click "Generate Report" to see your nutrition analysis.';
+        }
+
+        function changeToCurrentDate() {
+            initializeMealData();
+            updateDateDisplay();
+            renderMeals();
+            document.getElementById('reportContainer').innerHTML = 'Add foods and click "Generate Report" to see your nutrition analysis.';
+        }
+
+        // Populate food select
+        function populateFoodSelect() {
+            const select = document.getElementById('foodSelect');
+            const customFoods = JSON.parse(localStorage.getItem('customFoods') || '{}');
+            
+            // Clear existing options except placeholder
+            select.innerHTML = '<option value="">Choose Food...</option>';
+            
+            // Add preset foods
+            for (let key in foodDatabase) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = foodDatabase[key].name;
+                select.appendChild(option);
+            }
+            
+            // Add custom foods
+            if (Object.keys(customFoods).length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = '--- Custom Foods ---';
+                for (let key in customFoods) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = customFoods[key].name + ' (Custom)';
+                    optgroup.appendChild(option);
+                }
+                select.appendChild(optgroup);
+            }
+        }
+
+        function showPreset() {
+            document.getElementById('presetTab').style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)';
+            document.getElementById('presetTab').style.color = 'white';
+            document.getElementById('customTab').style.background = 'var(--light)';
+            document.getElementById('customTab').style.color = 'var(--gray)';
+            document.getElementById('customFoodForm').style.display = 'none';
+        }
+
+        function showCustom() {
+            document.getElementById('customTab').style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)';
+            document.getElementById('customTab').style.color = 'white';
+            document.getElementById('presetTab').style.background = 'var(--light)';
+            document.getElementById('presetTab').style.color = 'var(--gray)';
+            document.getElementById('customFoodForm').style.display = 'block';
+        }
+
+        function addCustomFood() {
+            const name = document.getElementById('customFoodName').value.trim();
+            const cal = parseFloat(document.getElementById('customCalories').value);
+            const prot = parseFloat(document.getElementById('customProtein').value);
+            const carb = parseFloat(document.getElementById('customCarbs').value);
+            const fat = parseFloat(document.getElementById('customFat').value);
+
+            if (!name || isNaN(cal) || isNaN(prot) || isNaN(carb) || isNaN(fat)) {
+                alert('Please fill all fields with valid numbers');
+                return;
+            }
+
+            const customFoods = JSON.parse(localStorage.getItem('customFoods') || '{}');
+            const key = 'custom_' + Date.now();
+            customFoods[key] = { name, calories: cal, protein: prot, carbs: carb, fat };
+            foodDatabase[key] = { name, calories: cal, protein: prot, carbs: carb, fat };
+            localStorage.setItem('customFoods', JSON.stringify(customFoods));
+
+            // Reset form
+            document.getElementById('customFoodName').value = '';
+            document.getElementById('customCalories').value = '';
+            document.getElementById('customProtein').value = '';
+            document.getElementById('customCarbs').value = '';
+            document.getElementById('customFat').value = '';
+
+            populateFoodSelect();
+            showPreset();
+            alert('Custom food added successfully!');
+        }
+
+        function addFood() {
+            const meal = document.getElementById('mealSelect').value;
+            const foodKey = document.getElementById('foodSelect').value;
+            const grams = parseFloat(document.getElementById('gramsInput').value);
+
+            if (!foodKey || isNaN(grams) || grams <= 0) {
+                alert('Please select a food and enter valid grams');
+                return;
+            }
+
+            const food = foodDatabase[foodKey];
+            if (!food) {
+                alert('Food not found');
+                return;
+            }
+
+            mealData[meal].push({
+                foodKey: foodKey,
+                name: food.name,
+                grams: grams
+            });
+
+            const allData = JSON.parse(localStorage.getItem('mealData'));
+            allData[getDateKey(currentDate)] = mealData;
+            localStorage.setItem('mealData', JSON.stringify(allData));
+
+            document.getElementById('gramsInput').value = '';
+            renderMeals();
+        }
+
+        function removeFood(meal, index) {
+            mealData[meal].splice(index, 1);
+            const allData = JSON.parse(localStorage.getItem('mealData'));
+            allData[getDateKey(currentDate)] = mealData;
+            localStorage.setItem('mealData', JSON.stringify(allData));
+            renderMeals();
+        }
+
+        function renderMeals() {
+            const container = document.getElementById('mealsContainer');
+            container.innerHTML = '';
+
+            const mealOrder = ['breakfast', 'lunch', 'dinner', 'snacks'];
+            const mealNames = { breakfast: '🌅 Breakfast', lunch: '🌞 Lunch', dinner: '🌙 Dinner', snacks: '🍿 Snacks' };
+
+            for (let meal of mealOrder) {
+                const mealDiv = document.createElement('div');
+                mealDiv.className = 'meal-section';
+                
+                mealDiv.innerHTML = `<h3>${mealNames[meal]}</h3>`;
+
+                if (mealData[meal].length === 0) {
+                    mealDiv.innerHTML += '<p class="empty-meal">No items added</p>';
+                } else {
+                    mealData[meal].forEach((item, index) => {
+                        const foodDiv = document.createElement('div');
+                        foodDiv.className = 'food-item';
+                        foodDiv.innerHTML = `
+                            <div class="food-item-details">
+                                <div class="food-item-name">${item.name}</div>
+                                <div class="food-item-gram">${item.grams}g</div>
+                            </div>
+                            <button class="food-item-delete" onclick="removeFood('${meal}', ${index})">✕</button>
+                        `;
+                        mealDiv.appendChild(foodDiv);
+                    });
+                }
+
+                container.appendChild(mealDiv);
+            }
+        }
+
+        function calculateNutrition(meal) {
+            let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+            mealData[meal].forEach(item => {
+                const food = foodDatabase[item.foodKey];
+                if (food) {
+                    nutrition.calories += (food.calories * item.grams) / 100;
+                    nutrition.protein += (food.protein * item.grams) / 100;
+                    nutrition.carbs += (food.carbs * item.grams) / 100;
+                    nutrition.fat += (food.fat * item.grams) / 100;
+                }
+            });
+            return nutrition;
+        }
+
+        function getDailyTotal() {
+            let daily = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+            for (let meal of ['breakfast', 'lunch', 'dinner', 'snacks']) {
+                const nut = calculateNutrition(meal);
+                daily.calories += nut.calories;
+                daily.protein += nut.protein;
+                daily.carbs += nut.carbs;
+                daily.fat += nut.fat;
+            }
+            return daily;
+        }
+
+        function generateReport() {
+            if (Object.values(mealData).every(m => m.length === 0)) {
+                alert('Add some foods first!');
+                return;
+            }
+
+            const daily = getDailyTotal();
+            const targets = { calories: 2000, protein: 50, carbs: 250, fat: 65 };
+
+            let html = `
+                <div class="daily-total">
+                    <h3>Daily Summary</h3>
+                    <div class="daily-total-grid">
+                        <div class="daily-total-item">
+                            <div class="daily-total-value">${daily.calories.toFixed(0)}</div>
+                            <div class="daily-total-label">Cal</div>
+                        </div>
+                        <div class="daily-total-item">
+                            <div class="daily-total-value">${daily.protein.toFixed(1)}g</div>
+                            <div class="daily-total-label">Protein</div>
+                        </div>
+                        <div class="daily-total-item">
+                            <div class="daily-total-value">${daily.carbs.toFixed(1)}g</div>
+                            <div class="daily-total-label">Carbs</div>
+                        </div>
+                        <div class="daily-total-item">
+                            <div class="daily-total-value">${daily.fat.toFixed(1)}g</div>
+                            <div class="daily-total-label">Fat</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Meal Breakdown
+            html += '<div class="analysis-box"><h3>Meal Breakdown</h3>';
+            const mealNames = { breakfast: '🌅 Breakfast', lunch: '🌞 Lunch', dinner: '🌙 Dinner', snacks: '🍿 Snacks' };
+            for (let meal of ['breakfast', 'lunch', 'dinner', 'snacks']) {
+                if (mealData[meal].length > 0) {
+                    const nut = calculateNutrition(meal);
+                    html += `
+                        <div class="analysis-item">
+                            <div class="analysis-label">${mealNames[meal]}</div>
+                            <div class="analysis-value">${nut.calories.toFixed(0)} cal | ${nut.protein.toFixed(1)}g prot | ${nut.carbs.toFixed(1)}g carbs | ${nut.fat.toFixed(1)}g fat</div>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div>';
+
+            // Analysis
+            html += '<div class="analysis-box"><h3>Nutrition Analysis</h3>';
+            html += createProgressBar('Calories', daily.calories, targets.calories);
+            html += createProgressBar('Protein', daily.protein, targets.protein);
+            html += createProgressBar('Carbs', daily.carbs, targets.carbs);
+            html += createProgressBar('Fat', daily.fat, targets.fat);
+            html += '</div>';
+
+            // Recommendations
+            html += '<div class="recommendations-box"><h3>Diet Recommendations</h3>';
+            html += generateRecommendations(daily);
+            html += '</div>';
+
+            document.getElementById('reportContainer').innerHTML = html;
+        }
+
+        function createProgressBar(label, value, target) {
+            const percentage = Math.min((value / target) * 100, 100);
+            return `
+                <div class="analysis-item">
+                    <div class="analysis-label">${label}: ${value.toFixed(1)} / ${target} ${label === 'Calories' ? 'kcal' : 'g'}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${percentage}%"></div>
+                    </div>
+                    <div class="analysis-value" style="font-size: 0.9em; margin-top: 5px;">${percentage.toFixed(0)}% of target</div>
+                </div>
+            `;
+        }
+
+        function generateRecommendations(daily) {
+            let recommendations = [];
+
+            if (daily.calories > 2200) {
+                recommendations.push('Reduce portion sizes - calorie intake is high');
+            } else if (daily.calories < 1800) {
+                recommendations.push('Increase meals - calorie intake is low');
+            } else {
+                recommendations.push('Calorie intake is well balanced');
+            }
+
+            if (daily.protein < 45) {
+                recommendations.push('Add protein: paneer, dal, fish, or eggs');
+            } else if (daily.protein > 70) {
+                recommendations.push('Protein intake is excellent');
+            } else {
+                recommendations.push('Protein intake is balanced');
+            }
+
+            if (daily.carbs > 300) {
+                recommendations.push('Switch to whole grains and reduce refined carbs');
+            } else if (daily.carbs < 200) {
+                recommendations.push('Add more whole grains and vegetables');
+            } else {
+                recommendations.push('Carbohydrate intake is balanced');
+            }
+
+            if (daily.fat > 80) {
+                recommendations.push('Reduce oil and fatty foods like samosa and pakora');
+            } else if (daily.fat < 50) {
+                recommendations.push('Add healthy fats from ghee, nuts, and yogurt');
+            } else {
+                recommendations.push('Fat intake is balanced');
+            }
+
+            return recommendations.map(rec => `<div class="recommendation-item">${rec}</div>`).join('');
+        }
+
+        function resetDay() {
+            if (confirm('Are you sure you want to reset all meals for this day?')) {
+                const allData = JSON.parse(localStorage.getItem('mealData'));
+                allData[getDateKey(currentDate)] = {
+                    breakfast: [],
+                    lunch: [],
+                    dinner: [],
+                    snacks: []
+                };
+                localStorage.setItem('mealData', JSON.stringify(allData));
+                mealData = allData[getDateKey(currentDate)];
+                renderMeals();
+                document.getElementById('reportContainer').innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Add foods and click "Generate Report"</p></div>';
+            }
+        }
+
+        // ===== CHART GENERATION FUNCTIONS =====
+        function generateMacroChart(daily) {
+            const ctx = document.getElementById('macroChart');
+            if (!ctx) return;
+
+            if (macroChart) macroChart.destroy();
+
+            macroChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Protein', 'Carbs', 'Fat'],
+                    datasets: [{
+                        data: [daily.protein, daily.carbs, daily.fat],
+                        backgroundColor: ['#4ECDC4', '#FFD93D', '#95E1D3'],
+                        borderColor: ['#3DB3AB', '#F0B700', '#7ECBB3'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { font: { size: 12 }, padding: 15 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateCalorieChart(daily, target) {
+            const ctx = document.getElementById('calorieChart');
+            if (!ctx) return;
+
+            if (calorieChart) calorieChart.destroy();
+
+            calorieChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Consumed', 'Target', 'Remaining'],
+                    datasets: [{
+                        label: 'Calories (kcal)',
+                        data: [daily.calories, target, Math.max(target - daily.calories, 0)],
+                        backgroundColor: ['#FF6B6B', '#4ECDC4', '#51CF66'],
+                        borderRadius: 8,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true }
+                    },
+                    scales: {
+                        x: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function generateEnhancedReport() {
+            if (Object.values(mealData).every(m => m.length === 0)) {
+                alert('Add some foods first!');
+                return;
+            }
+
+            const daily = getDailyTotal();
+            const targets = { calories: 2000, protein: 50, carbs: 250, fat: 65 };
+
+            let html = `
+                <div class="daily-totals">
+                    <div class="total-card cals">
+                        <div class="total-label">Total Calories</div>
+                        <div class="total-value">${daily.calories.toFixed(0)}</div>
+                        <div style="font-size: 0.85em; color: #999; margin-top: 8px;">Target: ${targets.calories} kcal</div>
+                    </div>
+                    <div class="total-card protein">
+                        <div class="total-label">Protein</div>
+                        <div class="total-value">${daily.protein.toFixed(1)}g</div>
+                        <div style="font-size: 0.8em; color: #999;">Target: ${targets.protein}g</div>
+                    </div>
+                    <div class="total-card carbs">
+                        <div class="total-label">Carbs</div>
+                        <div class="total-value">${daily.carbs.toFixed(1)}g</div>
+                        <div style="font-size: 0.8em; color: #999;">Target: ${targets.carbs}g</div>
+                    </div>
+                    <div class="total-card fat">
+                        <div class="total-label">Fat</div>
+                        <div class="total-value">${daily.fat.toFixed(1)}g</div>
+                        <div style="font-size: 0.8em; color: #999;">Target: ${targets.fat}g</div>
+                    </div>
+                </div>
+
+                <div class="charts-section">
+                    <div class="chart-container">
+                        <div class="chart-title">Macro Distribution</div>
+                        <canvas id="macroChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Calorie Progress</div>
+                        <canvas id="calorieChart"></canvas>
+                    </div>
+                </div>
+            `;
+
+            // Meal Breakdown
+            html += '<div class="analysis-box"><h3>📋 Meal Breakdown</h3>';
+            const mealNames = { breakfast: '🌅 Breakfast', lunch: '🌞 Lunch', dinner: '🌙 Dinner', snacks: '🍿 Snacks' };
+            for (let meal of ['breakfast', 'lunch', 'dinner', 'snacks']) {
+                if (mealData[meal].length > 0) {
+                    const nut = calculateNutrition(meal);
+                    html += `
+                        <div class="analysis-item">
+                            <div class="analysis-label">${mealNames[meal]}</div>
+                            <div class="analysis-value">${nut.calories.toFixed(0)} cal | ${nut.protein.toFixed(1)}g prot | ${nut.carbs.toFixed(1)}g carbs | ${nut.fat.toFixed(1)}g fat</div>
+                        </div>
+                    `;
+                }
+            }
+            html += '</div>';
+
+            // Analysis
+            html += '<div class="analysis-box"><h3>📊 Nutrition Analysis</h3>';
+            html += createProgressBar('Calories', daily.calories, targets.calories);
+            html += createProgressBar('Protein', daily.protein, targets.protein);
+            html += createProgressBar('Carbs', daily.carbs, targets.carbs);
+            html += createProgressBar('Fat', daily.fat, targets.fat);
+            html += '</div>';
+
+            // Recommendations
+            html += '<div class="recommendations-box"><h3>✨ Diet Recommendations</h3>';
+            html += generateRecommendations(daily);
+            html += '</div>';
+
+            document.getElementById('reportContainer').innerHTML = html;
+
+            // Generate charts after rendering
+            setTimeout(() => {
+                generateMacroChart(daily);
+                generateCalorieChart(daily, targets.calories);
+            }, 100);
+        }
+
+        // Replace old generateReport with new one
+        const originalGenerateReport = generateReport;
+        generateReport = generateEnhancedReport;
+
+        // Initialize on page load
+        window.onload = function() {
+            initializeMealData();
+            updateDateDisplay();
+            populateFoodSelect();
+            renderMeals();
+        };
+    </script>
+</body>
+</html>
